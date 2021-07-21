@@ -1,0 +1,12 @@
+cmake
+cython
+ipython
+jupyter
+jupyterlab
+matplotlib
+numpy
+pandas
+tensorflow
+scikit-learn
+scipy
+tqdm

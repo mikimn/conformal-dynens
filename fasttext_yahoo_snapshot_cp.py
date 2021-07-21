@@ -1,0 +1,446 @@
+"""
+text classification using
+keras-fasttext 
+"""
+from __future__ import print_function
+
+
+from nonconformist.icp import IcpClassifier
+from nonconformist.nc import ClassifierNc, InverseProbabilityErrFunc
+import tensorflow as tf
+from tensorflow.keras.layers import Dense, Conv2D, BatchNormalization, Activation
+from tensorflow.keras.layers import AveragePooling2D, Input, Flatten
+from tensorflow.keras.preprocessing import sequence
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Embedding
+from tensorflow.keras.layers import GlobalAveragePooling1D
+
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.callbacks import ModelCheckpoint, LearningRateScheduler
+from tensorflow.keras.callbacks import ReduceLROnPlateau
+from tensorflow.keras.callbacks import LambdaCallback
+from tensorflow.keras.callbacks import CSVLogger
+from tensorflow.keras.callbacks import Callback
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.regularizers import l2
+from tensorflow.keras import backend as K
+from tensorflow.keras.models import Model
+from tensorflow.keras.datasets import cifar10
+import numpy as np
+import pandas as pd
+import pickle
+import math
+from collections import defaultdict
+import os
+
+
+import script.data_reader_yahoo as data_reader_yahoo
+
+
+###############################################
+# user params
+################################################
+
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument("-s", "--seed", help="random seed")
+parser.add_argument("-r", "--resample",
+                    help="resampling training data", default=True)
+parser.add_argument("-sd", "--savedir", help="saving directory")
+parser.add_argument("-f", "--datafile", help="data file", required=True)
+parser.add_argument("-k", "--topk", help="top k models to save", default=10)
+parser.add_argument("-g", "--gpu", default=0)
+
+# args = parser.parse_args()
+
+
+class Bunch:
+    def __init__(self, **entries):
+        self.__dict__.update(entries)
+
+
+# args = parser.parse_args()
+datafile = 'DS3'
+args = Bunch(
+    seed=10,
+    resample=True,
+    savedir=f'./output/yahoo_answers_csv_imbalance3/{datafile}/snapshot/run_1',
+    datafile=f'./data/yahoo_answers_csv_imbalance3/{datafile}',
+    do_train=False,
+    topK=10,
+    gpu=0
+)
+
+seed = int(args.seed)
+resample = args.resample
+save_dir = args.savedir
+datafile = args.datafile
+top_k = int(args.topK)  # 100 epoc k=5
+do_train = args.do_train
+print("@@@@---Top-K", top_k)
+# add gpu target
+# gpuId = args.gpu
+# os.environ["CUDA_VISIBLE_DEVICES"] = str(gpuId)
+
+# add destination dir:
+print("output dir", save_dir)
+if not os.path.exists(save_dir):
+    print("adding saving directory")
+    os.makedirs(save_dir)
+# Set random seed
+if seed is not None:
+    print('Setting seed.')
+    tf.random.set_seed(seed)
+    np.random.seed(seed)
+
+
+###############################################
+# MODEL params
+###############################################
+
+# Set parameters:
+# ngram_range = 2 will add bi-grams features-not use
+ngram_range = 1
+max_features = 10000
+maxlen = 1014
+batch_size = 16
+embedding_dims = 50
+epochs = 50
+initial_lr = 1e-3
+num_classes = 10
+snapshot_window_size = int(math.ceil(epochs/top_k))
+
+print('Loading data...')
+(x_train, y_train), (x_test, y_test), (x_valid, y_valid) = data_reader_yahoo.load_data_yahoo_ans(datafile,
+                                                                                                 max_words=max_features,
+                                                                                                 max_len=maxlen)
+
+
+###############################################
+# MODEL definitions
+###############################################
+
+
+def create_ngram_set(input_list, ngram_value=2):
+    """
+    Extract a set of n-grams from a list of integers.
+
+    >>> create_ngram_set([1, 4, 9, 4, 1, 4], ngram_value=2)
+    {(4, 9), (4, 1), (1, 4), (9, 4)}
+
+    >>> create_ngram_set([1, 4, 9, 4, 1, 4], ngram_value=3)
+    [(1, 4, 9), (4, 9, 4), (9, 4, 1), (4, 1, 4)]
+    """
+    return set(zip(*[input_list[i:] for i in range(ngram_value)]))
+
+
+def add_ngram(sequences, token_indice, ngram_range=2):
+    """
+    Augment the input list of list (sequences) by appending n-grams values.
+
+    Example: adding bi-gram
+    >>> sequences = [[1, 3, 4, 5], [1, 3, 7, 9, 2]]
+    >>> token_indice = {(1, 3): 1337, (9, 2): 42, (4, 5): 2017}
+    >>> add_ngram(sequences, token_indice, ngram_range=2)
+    [[1, 3, 4, 5, 1337, 2017], [1, 3, 7, 9, 2, 1337, 42]]
+
+    Example: adding tri-gram
+    >>> sequences = [[1, 3, 4, 5], [1, 3, 7, 9, 2]]
+    >>> token_indice = {(1, 3): 1337, (9, 2): 42, (4, 5): 2017, (7, 9, 2): 2018}
+    >>> add_ngram(sequences, token_indice, ngram_range=3)
+    [[1, 3, 4, 5, 1337, 2017], [1, 3, 7, 9, 2, 1337, 42, 2018]]
+    """
+    new_sequences = []
+    for input_list in sequences:
+        new_list = input_list[:]
+        for ngram_value in range(2, ngram_range + 1):
+            for i in range(len(new_list) - ngram_value + 1):
+                ngram = tuple(new_list[i:i + ngram_value])
+                if ngram in token_indice:
+                    new_list.append(token_indice[ngram])
+        new_sequences.append(new_list)
+
+    return new_sequences
+
+
+#
+# Resample the training data set from training+validating data set with the same class distribution with the loaded ones
+if resample:
+    print('Resampling training and validating data sets...')
+    x_tv = np.concatenate((x_train, x_valid), axis=0)
+    y_tv = np.concatenate((y_train, y_valid), axis=0)
+    index_dict = defaultdict(list)
+    for i in range(len(y_tv)):
+        index_dict[y_tv[i][0]].append(i)
+    valid_index_dict = defaultdict(list)
+    for i in range(len(y_valid)):
+        valid_index_dict[y_valid[i][0]].append(i)
+    valid_index = []
+    for c in valid_index_dict.keys():
+        valid_index.extend(np.random.choice(
+            index_dict[c], size=len(valid_index_dict[c]), replace=False))
+    train_index = np.setdiff1d(range(len(y_tv)), valid_index)
+
+    x_train, y_train = x_tv[train_index], y_tv[train_index]
+    x_valid, y_valid = x_tv[valid_index], y_tv[valid_index]
+
+
+print(type(x_train))
+print(type(y_train))
+print(len(x_train), 'train sequences')
+print(len(x_test), 'test sequences')
+print('Average train sequence length: {}'.format(
+    np.mean(list(map(len, x_train)), dtype=int)))
+print('Average test sequence length: {}'.format(
+    np.mean(list(map(len, x_test)), dtype=int)))
+
+
+if ngram_range > 1:
+    print('Adding {}-gram features'.format(ngram_range))
+    # Create set of unique n-gram from the training set.
+    ngram_set = set()
+    for input_list in x_train:
+        for i in range(2, ngram_range + 1):
+            set_of_ngram = create_ngram_set(input_list, ngram_value=i)
+            ngram_set.update(set_of_ngram)
+
+    # Dictionary mapping n-gram token to a unique integer.
+    # Integer values are greater than max_features in order
+    # to avoid collision with existing features.
+    start_index = max_features + 1
+    token_indice = {v: k + start_index for k, v in enumerate(ngram_set)}
+    indice_token = {token_indice[k]: k for k in token_indice}
+
+    # max_features is the highest integer that could be found in the dataset.
+    max_features = np.max(list(indice_token.keys())) + 1
+
+    # Augmenting x_train and x_test with n-grams features
+    x_train = add_ngram(x_train, token_indice, ngram_range)
+    x_test = add_ngram(x_test, token_indice, ngram_range)
+    print('Average train sequence length: {}'.format(
+        np.mean(list(map(len, x_train)), dtype=int)))
+    print('Average test sequence length: {}'.format(
+        np.mean(list(map(len, x_test)), dtype=int)))
+
+print('Pad sequences (samples x time)')
+x_train = sequence.pad_sequences(x_train, maxlen=maxlen)
+x_test = sequence.pad_sequences(x_test, maxlen=maxlen)
+print('x_train shape:', x_train.shape)
+print('x_test shape:', x_test.shape)
+
+###################################
+#
+#  CAllbacks
+#
+###################################
+
+
+def next_run_dir(path):
+    """
+    Naive (slow) version of next_path
+    """
+    i = 1
+    while os.path.exists('{}_{}'.format(path, i)):
+        i += 1
+    return '{}_{}'.format(path, i)
+
+
+def lr_schedule(epoch):
+    """Learning Rate Schedule
+
+    Learning rate is scheduled to be reduced after 80, 120, 160, 180 epochs.
+    Called automatically every epoch as part of callbacks during training.
+
+    # Arguments
+        epoch (int): The number of epochs
+
+    # Returns
+        lr (float32): learning rate
+    """
+    lr = 1e-3
+    if epoch > 0.9 * epochs:
+        lr *= 0.5e-3
+    elif epoch > 0.8 * epochs:
+        lr *= 1e-3
+    elif epoch > 0.6 * epochs:
+        lr *= 1e-2
+    elif epoch > 0.4 * epochs:
+        lr *= 1e-1
+    print('Learning rate: ', lr)
+    return lr
+
+
+def cyclic_cosine_anneal_schedule_itr(batch_logs, initial_lr=1e-3, update_window_size=15600):
+    '''
+    Wrapper function to create a LearningRateScheduler with cosine annealing schedule per iteration.
+    '''
+    def lr_schedule(batch, logs):
+        """Learning Rate Schedule
+
+        Learning rate is scheduled to be updated per epoch with a cosine function per iteration. 
+        Learning rate is raised to initial_lr every update_window_size.
+
+        # Arguments
+            epoch (int): The number of epochs
+
+        # Returns
+            lr (float32): learning rate
+        """
+        iteration = model.optimizer.iterations
+        print('\n Optimizer iteration {}, batch {}'.format(
+            K.eval(iteration), batch))
+        lr = initial_lr / 2 * \
+            (math.cos(math.pi * ((K.eval(iteration) %
+             update_window_size) / update_window_size)) + 1)
+        K.set_value(model.optimizer.lr, lr)
+        print('\n Learning rate {}, Model learning rate {}'.format(
+            lr, K.eval(model.optimizer.lr)))
+
+    def batch_log(batch, logs):
+        batch_logs['iteration'].append(K.eval(model.optimizer.iterations))
+        batch_logs['lr'].append(K.eval(model.optimizer.lr))
+        batch_logs['loss'].append(logs['loss'])
+        batch_logs['acc'].append(logs['acc'])
+
+    return LambdaCallback(on_batch_begin=lr_schedule)
+
+
+###################################
+#
+# FASTEXT M O D E L
+#
+##################################
+
+with tf.device('/device:GPU:0'), tf.compat.v1.Session(config=tf.compat.v1.ConfigProto()):
+    print('Build model...')
+    model = Sequential()
+
+    # we start off with an efficient embedding layer which maps
+    # our vocab indices into embedding_dims dimensions
+    model.add(Embedding(max_features,
+                        embedding_dims,
+                        input_length=maxlen))
+
+    # we add a GlobalAveragePooling1D, which will average the embeddings
+    # of all words in the document
+    model.add(GlobalAveragePooling1D())
+
+    # We project onto a single unit output layer, and squash it with a sigmoid:
+    #model.add(Dense(2, activation='sigmoid'))
+    model.add(Dense(y_train.shape[1], activation='softmax'))
+
+    # model.compile(loss='binary_crossentropy',
+    model.compile(loss='categorical_crossentropy',
+                  optimizer=Adam(lr=initial_lr),
+                  metrics=['accuracy'])
+
+    cp = IcpClassifier(
+        ClassifierNc(
+            model,
+            err_func=InverseProbabilityErrFunc()
+        )
+    )
+
+    ########################################
+    # add logs/call backs
+    # Training log writer
+    #######################################
+    model_type = "unique"
+    model_name = 'yahoo_%s_model-{epoch:04d}.h5' % model_type
+    filepath = os.path.join(save_dir, model_name)
+    print('Preparing callbacks...')
+    # Prepare callbacks for model saving and for learning rate adjustment.
+    checkpoint = ModelCheckpoint(filepath=filepath,
+                                 monitor='val_accuracy',
+                                 verbose=1,
+                                 save_best_only=False,
+                                 mode='max')
+    # Learning rate updater
+    batch_num = int(x_train.shape[0]/batch_size)
+    update_window_size = int(math.ceil(epochs*batch_num/top_k))
+    batch_logs = {'iteration': [], 'lr': [], 'loss': [], 'acc': []}
+    lr_scheduler = cyclic_cosine_anneal_schedule_itr(
+        initial_lr=initial_lr, update_window_size=update_window_size, batch_logs=batch_logs)
+
+    # add callbacks
+    logfile = '{}/callback_training_log.csv'.format(save_dir)
+    csvlog = CSVLogger(logfile, separator=',', append=False)
+    callbacks = [checkpoint, lr_scheduler, csvlog]
+
+    ######################################
+    # Training
+    ######################################
+    logfile = '{}/training_log.csv'.format(save_dir)
+    if do_train:
+        history = cp.fit(x_train, y_train,
+                         batch_size=batch_size,
+                         epochs=epochs,
+                         validation_data=(x_valid, y_valid),
+                         shuffle=True,
+                         callbacks=callbacks
+                         )
+
+        ###############################################
+        # PREDICTION AND OUPUT
+        ###############################################
+        # Save training log
+        print('Saving training log...')
+        train_error = history.history['loss']
+        valid_accuracy = history.history['val_accuracy']
+        f = open(logfile, 'w')
+        f.write('current_epoch,total_epochs,train_loss,validation_accuracy\n')
+        for i in range(len(train_error)):
+            f.write('{},{},{},{}\n'.format(i+1, epochs,
+                    train_error[i], valid_accuracy[i]))
+        f.close()
+    else:
+        training_log = pd.read_csv(logfile)
+        valid_accuracy = list(training_log.validation_accuracy)
+        print('Skipping training...')
+
+    # Save index for combination
+    c = [str(i) for i in range(num_classes)]
+    header = ','.join(c) + '\n'
+    print('Writing index file and predict files...')
+    indexfile = '{}/index.csv'.format(save_dir)
+    f = open(indexfile, 'w')
+    top_x = []
+
+    for i in range(1, top_k):
+        top_x.append(np.argmax(
+            valid_accuracy[i*snapshot_window_size:(i+1)*snapshot_window_size]) + i*snapshot_window_size)
+    top_v = [valid_accuracy[i] for i in top_x]
+    for x, v in zip(top_x, top_v):
+        name = 'prediction_{:04d}.csv'.format(x+1)
+        weight = v  # valid_accuracy[epochs-1]
+        print("writing to index:", name+str(weight))
+        f.write('{},{}\n'.format(name, weight))
+        # predicting
+        modelname = 'yahoo_{}_model-{:04d}.h5'.format(model_type, x)
+        filepath = os.path.join(save_dir, modelname)
+
+        cp.model.load_weights(filepath)
+        cp.calibrate(x_valid, np.argmax(y_valid, axis=1))
+
+        predicts = model.predict(x_test)
+        # Save predicts
+        predictfile = '{}/prediction_{:04d}.csv'.format(save_dir, x+1)
+        f1 = open(predictfile, 'w')
+        f1.write(header)
+        np.savetxt(f1, predicts, delimiter=",")
+        f1.close()
+
+        p = cp.predict(x_test, significance=0.1)
+        f3 = open('{}/prediction_set_{:04d}.csv'.format(save_dir, x+1), 'w')
+        f3.write(header)
+        np.savetxt(f3, p, delimiter=",")
+        f3.close()
+
+    f.close()
+    # Save targets
+    print('Saving target file...')
+    targetfile = '{}/target.csv'.format(save_dir)
+    f2 = open(targetfile, 'w')
+    f2.write(header)
+    np.savetxt(f2, y_test, delimiter=",")
+    f2.close()

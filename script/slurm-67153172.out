@@ -1,0 +1,126 @@
+/Users/yakiryehuda/Downloads/dynens cifar10_imbalance DS1 run_1 22
+Using TensorFlow backend.
+Setting seed.
+Loading data...
+Traceback (most recent call last):
+  File "cifar10_resnet-snapshot.py", line 99, in <module>
+    with open(datafile, 'rb') as f:
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/yakiryehuda/Downloads/dynens/data/cifar10_imbalance/DS1'
+Using TensorFlow backend.
+Setting seed.
+Loading data...
+Traceback (most recent call last):
+  File "cifar10_resnet-snapshotA.py", line 97, in <module>
+    with open(datafile, 'rb') as f:
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/yakiryehuda/Downloads/dynens/data/cifar10_imbalance/DS1'
+Using TensorFlow backend.
+Loading data...
+Traceback (most recent call last):
+  File "cifar10_resnet-snapshotB.py", line 94, in <module>
+    with open(datafile, 'rb') as f:
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/yakiryehuda/Downloads/dynens/data/cifar10_imbalance/DS1'
+/Users/yakiryehuda/Downloads/dynens cifar10_imbalance DS1 run_2 34
+Using TensorFlow backend.
+Setting seed.
+Loading data...
+Traceback (most recent call last):
+  File "cifar10_resnet-snapshot.py", line 99, in <module>
+    with open(datafile, 'rb') as f:
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/yakiryehuda/Downloads/dynens/data/cifar10_imbalance/DS1'
+Using TensorFlow backend.
+Setting seed.
+Loading data...
+Traceback (most recent call last):
+  File "cifar10_resnet-snapshotA.py", line 97, in <module>
+    with open(datafile, 'rb') as f:
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/yakiryehuda/Downloads/dynens/data/cifar10_imbalance/DS1'
+Using TensorFlow backend.
+Loading data...
+Traceback (most recent call last):
+  File "cifar10_resnet-snapshotB.py", line 94, in <module>
+    with open(datafile, 'rb') as f:
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/yakiryehuda/Downloads/dynens/data/cifar10_imbalance/DS1'
+/Users/yakiryehuda/Downloads/dynens cifar10_imbalance DS2 run_1 22
+Using TensorFlow backend.
+Setting seed.
+Loading data...
+Traceback (most recent call last):
+  File "cifar10_resnet-snapshot.py", line 99, in <module>
+    with open(datafile, 'rb') as f:
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/yakiryehuda/Downloads/dynens/data/cifar10_imbalance/DS2'
+Using TensorFlow backend.
+Setting seed.
+Loading data...
+Traceback (most recent call last):
+  File "cifar10_resnet-snapshotA.py", line 97, in <module>
+    with open(datafile, 'rb') as f:
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/yakiryehuda/Downloads/dynens/data/cifar10_imbalance/DS2'
+Using TensorFlow backend.
+Loading data...
+Traceback (most recent call last):
+  File "cifar10_resnet-snapshotB.py", line 94, in <module>
+    with open(datafile, 'rb') as f:
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/yakiryehuda/Downloads/dynens/data/cifar10_imbalance/DS2'
+/Users/yakiryehuda/Downloads/dynens cifar10_imbalance DS2 run_2 34
+Using TensorFlow backend.
+Setting seed.
+Loading data...
+Traceback (most recent call last):
+  File "cifar10_resnet-snapshot.py", line 99, in <module>
+    with open(datafile, 'rb') as f:
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/yakiryehuda/Downloads/dynens/data/cifar10_imbalance/DS2'
+Using TensorFlow backend.
+Setting seed.
+Loading data...
+Traceback (most recent call last):
+  File "cifar10_resnet-snapshotA.py", line 97, in <module>
+    with open(datafile, 'rb') as f:
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/yakiryehuda/Downloads/dynens/data/cifar10_imbalance/DS2'
+Using TensorFlow backend.
+Loading data...
+Traceback (most recent call last):
+  File "cifar10_resnet-snapshotB.py", line 94, in <module>
+    with open(datafile, 'rb') as f:
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/yakiryehuda/Downloads/dynens/data/cifar10_imbalance/DS2'
+/Users/yakiryehuda/Downloads/dynens cifar10_imbalance DS3 run_1 22
+Using TensorFlow backend.
+Setting seed.
+Loading data...
+Traceback (most recent call last):
+  File "cifar10_resnet-snapshot.py", line 99, in <module>
+    with open(datafile, 'rb') as f:
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/yakiryehuda/Downloads/dynens/data/cifar10_imbalance/DS3'
+Using TensorFlow backend.
+Setting seed.
+Loading data...
+Traceback (most recent call last):
+  File "cifar10_resnet-snapshotA.py", line 97, in <module>
+    with open(datafile, 'rb') as f:
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/yakiryehuda/Downloads/dynens/data/cifar10_imbalance/DS3'
+Using TensorFlow backend.
+Loading data...
+Traceback (most recent call last):
+  File "cifar10_resnet-snapshotB.py", line 94, in <module>
+    with open(datafile, 'rb') as f:
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/yakiryehuda/Downloads/dynens/data/cifar10_imbalance/DS3'
+/Users/yakiryehuda/Downloads/dynens cifar10_imbalance DS3 run_2 34
+Using TensorFlow backend.
+Setting seed.
+Loading data...
+Traceback (most recent call last):
+  File "cifar10_resnet-snapshot.py", line 99, in <module>
+    with open(datafile, 'rb') as f:
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/yakiryehuda/Downloads/dynens/data/cifar10_imbalance/DS3'
+Using TensorFlow backend.
+Setting seed.
+Loading data...
+Traceback (most recent call last):
+  File "cifar10_resnet-snapshotA.py", line 97, in <module>
+    with open(datafile, 'rb') as f:
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/yakiryehuda/Downloads/dynens/data/cifar10_imbalance/DS3'
+Using TensorFlow backend.
+Loading data...
+Traceback (most recent call last):
+  File "cifar10_resnet-snapshotB.py", line 94, in <module>
+    with open(datafile, 'rb') as f:
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/yakiryehuda/Downloads/dynens/data/cifar10_imbalance/DS3'
