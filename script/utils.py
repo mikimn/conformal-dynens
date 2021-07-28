@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 from scipy.stats import pearsonr
+from os.path import join
 
 # No consider about duplicates
 def find_index(X, v):
@@ -120,14 +121,14 @@ class Combination:
         self.model_weights = model_weights
                
     def get_config(self, config_name):
-        df_config = pd.read_csv(config_name,header=None,names=['model','weight'])
+        df_config = pd.read_csv(config_name, header=None,names=['model','weight'])
         self.model_names = df_config['model'].tolist()
         self.model_weights = df_config['weight'].tolist()
         self.num_model = len(self.model_names)
         
-    def read_model_outputs(self):
+    def read_model_outputs(self, workdir):
         for name in self.model_names:
-            self.model_outputs.append(pd.read_csv(name,header=0))
+            self.model_outputs.append(pd.read_csv(join(workdir, name), header=0))
 
     def set_model_outputs(self, model_outputs):
         self.model_outputs = model_outputs
@@ -189,6 +190,18 @@ class Combination:
             final += self.model_outputs[i]*self.model_weights[i] 
         final /= self.num_model
         return final
+
+    def conformal_selection(self, alpha=0.5):
+        shape = self.model_outputs[0].shape
+        sums = np.zeros(shape, dtype=float)
+        for i in range(shape[0]):
+            for j in range(self.num_model):
+                c = self.model_outputs[j].iloc[i]
+                sums[i] += c.fillna(0).astype(int)
+        final_sets = 1 * (sums >= (alpha * self.num_model))
+        final = pd.DataFrame(data=final_sets, index=self.model_outputs[0].index, columns=self.model_outputs[0].columns)
+        return final, pd.DataFrame(data=sums, index=self.model_outputs[0].index, columns=self.model_outputs[0].columns)
+
 
 def confusion_matrix(df_g, df_p):
     num_classes = df_g.shape[1]

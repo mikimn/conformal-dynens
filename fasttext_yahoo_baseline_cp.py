@@ -123,6 +123,8 @@ def load_data_yahoo_ans(src_path, max_words=20000, max_len=1000):
 parser = argparse.ArgumentParser()
 parser.add_argument("-s", "--seed", help="random seed")
 parser.add_argument("-sd", "--savedir", help="saving directory")
+parser.add_argument("-i", "--run", help="run number", type=int)
+parser.add_argument("-t", "--do_train", help="train or only evaluate", action='store_true')
 parser.add_argument("-f", "--datafile", help="data file", required=True)
 parser.add_argument("-k", "--topk", help="top k models to save", default=10)
 parser.add_argument("-g", "--gpu", default=0)
@@ -133,12 +135,16 @@ class Bunch:
         self.__dict__.update(entries)
 
 
-# args = parser.parse_args()
-datafile = 'DS3'
+args = parser.parse_args()
+datafile = args.datafile
+run = f'run_{args.run}'
+seed = 10 * args.run
+do_train = args.do_train
 args = Bunch(
-    seed=10,
-    savedir=f'./output/yahoo_answers_csv_imbalance3/{datafile}/baseline/run_1',
+    seed=seed,
+    savedir=f'./output/yahoo_answers_csv_imbalance3/{datafile}/baseline/{run}',
     datafile=f'./data/yahoo_answers_csv_imbalance3/{datafile}',
+    do_train=do_train,
     topK=10,
     gpu=0
 )
@@ -300,16 +306,25 @@ with tf.device('/device:GPU:0'), tf.compat.v1.Session(config=tf.compat.v1.Config
     ###############################################
     # add logs
     # Training log writer
-    csvlog = CSVLogger(
-        f'{save_dir}/callback_training_log.csv', separator=',', append=False)
+    logfile = f'{save_dir}/callback_training_log.csv'
+    csvlog = CSVLogger(logfile, separator=',', append=False)
     callbacks = [csvlog]
 
-    history = cp.fit(x_train, y_train,
-                     batch_size=batch_size,
-                     epochs=epochs,
-                     validation_data=(x_val, y_val),
-                     callbacks=callbacks
-                     )
+    if do_train:
+        history = cp.fit(x_train, y_train,
+                        batch_size=batch_size,
+                        epochs=epochs,
+                        validation_data=(x_val, y_val),
+                        callbacks=callbacks
+                        )
+        train_error = history.history['loss']
+        valid_accuracy = history.history['val_accuracy']
+    else:
+        training_log = pd.read_csv(logfile)
+        valid_accuracy = list(training_log.val_accuracy)
+        print('Skipping training...')
+
+
 
     # Turn labels one-hot => indexed
     cp.calibrate(x_val, np.argmax(y_val, axis=1))
@@ -322,8 +337,6 @@ with tf.device('/device:GPU:0'), tf.compat.v1.Session(config=tf.compat.v1.Config
 
     # Save training log
     print('Saving training log...')
-    train_error = history.history['loss']
-    valid_accuracy = history.history['val_accuracy']
 
     # Save index for combination
     c = [str(i) for i in range(num_classes)]

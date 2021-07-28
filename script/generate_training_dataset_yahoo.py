@@ -196,7 +196,7 @@ if __name__ =="__main__":
     input_file = 'test.csv'
     out_file   = 'val.csv'
     test_size  = 5000 #aprox 83% of test set only, 17% is used as val
-    split_test_to_val(src_path,src_path, input_file, input_cols, test_size, out_file)
+    split_test_to_val(src_path, src_path, input_file, input_cols, test_size, out_file)
     
     # 2.transform - train
     input_file ='train.csv'
@@ -207,7 +207,7 @@ if __name__ =="__main__":
     create_yahoo_imbalance(input_file, src_path, dest_path,input_classes,input_cols, 
                            new_distribution,incremental_pcts,out_names)
 
-    input_file ='test.csv'
-    create_yahoo_imbalance(input_file, src_path, dest_path,input_classes,input_cols, 
-                           new_distribution,incremental_pcts,out_names)
+    # input_file ='test.csv'
+    # create_yahoo_imbalance(input_file, src_path, dest_path,input_classes,input_cols, 
+    #                        new_distribution,incremental_pcts,out_names)
    

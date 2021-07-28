@@ -4,7 +4,6 @@ keras-fasttext
 """
 from __future__ import print_function
 
-
 from nonconformist.icp import IcpClassifier
 from nonconformist.nc import ClassifierNc, InverseProbabilityErrFunc
 import tensorflow as tf
@@ -18,50 +17,44 @@ from tensorflow.keras.layers import GlobalAveragePooling1D
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import ModelCheckpoint, LearningRateScheduler
 from tensorflow.keras.callbacks import ReduceLROnPlateau
-from tensorflow.keras.callbacks import LambdaCallback
 from tensorflow.keras.callbacks import CSVLogger
-from tensorflow.keras.callbacks import Callback
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.regularizers import l2
 from tensorflow.keras import backend as K
 from tensorflow.keras.models import Model
 from tensorflow.keras.datasets import cifar10
 import numpy as np
-import pandas as pd
-import pickle
 import math
+import pandas as pd
 from collections import defaultdict
 import os
 
 
 import script.data_reader_yahoo as data_reader_yahoo
 
-
 ###############################################
-# user params
-################################################
+# USER params
+###############################################
 
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("-s", "--seed", help="random seed")
-parser.add_argument("-r", "--resample",
-                    help="resampling training data", default=True)
+parser.add_argument("-r", "--resample", help="resampling training data", default=True)
 parser.add_argument("-sd", "--savedir", help="saving directory")
 parser.add_argument("-i", "--run", help="run number", type=int)
 parser.add_argument("-t", "--do_train", help="train or only evaluate", action='store_true')
 parser.add_argument("-f", "--datafile", help="data file", required=True)
 parser.add_argument("-k", "--topk", help="top k models to save", default=10)
-parser.add_argument("-g", "--gpu", default=0)
+parser.add_argument("-g","--gpu",default=0)
 
-# args = parser.parse_args()
-
+args = parser.parse_args()
 
 class Bunch:
     def __init__(self, **entries):
         self.__dict__.update(entries)
 
 
-args = parser.parse_args()
+# args = parser.parse_args()
 datafile = args.datafile
 run = f'run_{args.run}'
 seed = 10 * args.run
@@ -69,7 +62,7 @@ do_train = args.do_train
 args = Bunch(
     seed=seed,
     resample=True,
-    savedir=f'./output/yahoo_answers_csv_imbalance3/{datafile}/snapshot/{run}',
+    savedir=f'./output/yahoo_answers_csv_imbalance3/{datafile}/snapshotA/{run}',
     datafile=f'./data/yahoo_answers_csv_imbalance3/{datafile}',
     do_train=do_train,
     topK=10,
@@ -80,14 +73,15 @@ seed = int(args.seed)
 resample = args.resample
 save_dir = args.savedir
 datafile = args.datafile
-top_k = int(args.topK)  # 100 epoc k=5
-print("@@@@---Top-K", top_k)
-# add gpu target
-# gpuId = args.gpu
-# os.environ["CUDA_VISIBLE_DEVICES"] = str(gpuId)
+top_k = int(args.topK) # 100 epoc k=5
+do_train = args.do_train
+print("@@@@---Top-K",top_k)
+#add gpu target
+# gpuId= args.gpu
+# os.environ["CUDA_VISIBLE_DEVICES"]=str(gpuId)
 
 # add destination dir:
-print("output dir", save_dir)
+print ("output dir",save_dir)
 if not os.path.exists(save_dir):
     print("adding saving directory")
     os.makedirs(save_dir)
@@ -103,28 +97,25 @@ if seed is not None:
 ###############################################
 
 # Set parameters:
-# ngram_range = 2 will add bi-grams features-not use
+# ngram_range = 2 will add bi-grams features
 ngram_range = 1
 max_features = 10000
 maxlen = 1014
-batch_size = 16
+batch_size = 16  #32-- from 
 embedding_dims = 50
 epochs = 50
+num_classes =10
+# Params
 initial_lr = 1e-3
-num_classes = 10
 snapshot_window_size = int(math.ceil(epochs/top_k))
 
 print('Loading data...')
-(x_train, y_train), (x_test, y_test), (x_valid, y_valid) = data_reader_yahoo.load_data_yahoo_ans(datafile,
-                                                                                                 max_words=max_features,
-                                                                                                 max_len=maxlen)
+(x_train, y_train), (x_test, y_test) ,(x_valid,y_valid) = data_reader_yahoo.load_data_yahoo_ans(datafile,max_words=max_features,max_len=maxlen)
 
 
 ###############################################
-# MODEL definitions
+# MODEL definition
 ###############################################
-
-
 def create_ngram_set(input_list, ngram_value=2):
     """
     Extract a set of n-grams from a list of integers.
@@ -166,7 +157,6 @@ def add_ngram(sequences, token_indice, ngram_range=2):
 
     return new_sequences
 
-
 #
 # Resample the training data set from training+validating data set with the same class distribution with the loaded ones
 if resample:
@@ -181,16 +171,16 @@ if resample:
         valid_index_dict[y_valid[i][0]].append(i)
     valid_index = []
     for c in valid_index_dict.keys():
-        valid_index.extend(np.random.choice(
-            index_dict[c], size=len(valid_index_dict[c]), replace=False))
+        valid_index.extend(np.random.choice(index_dict[c], size=len(valid_index_dict[c]), replace=False))
     train_index = np.setdiff1d(range(len(y_tv)), valid_index)
 
     x_train, y_train = x_tv[train_index], y_tv[train_index]
     x_valid, y_valid = x_tv[valid_index], y_tv[valid_index]
+    
 
 
-print(type(x_train))
-print(type(y_train))
+print (type(x_train))
+print (type(y_train))
 print(len(x_train), 'train sequences')
 print(len(x_test), 'test sequences')
 print('Average train sequence length: {}'.format(
@@ -238,7 +228,6 @@ print('x_test shape:', x_test.shape)
 #
 ###################################
 
-
 def next_run_dir(path):
     """
     Naive (slow) version of next_path
@@ -248,40 +237,14 @@ def next_run_dir(path):
         i += 1
     return '{}_{}'.format(path, i)
 
-
-def lr_schedule(epoch):
-    """Learning Rate Schedule
-
-    Learning rate is scheduled to be reduced after 80, 120, 160, 180 epochs.
-    Called automatically every epoch as part of callbacks during training.
-
-    # Arguments
-        epoch (int): The number of epochs
-
-    # Returns
-        lr (float32): learning rate
-    """
-    lr = 1e-3
-    if epoch > 0.9 * epochs:
-        lr *= 0.5e-3
-    elif epoch > 0.8 * epochs:
-        lr *= 1e-3
-    elif epoch > 0.6 * epochs:
-        lr *= 1e-2
-    elif epoch > 0.4 * epochs:
-        lr *= 1e-1
-    print('Learning rate: ', lr)
-    return lr
-
-
-def cyclic_cosine_anneal_schedule_itr(batch_logs, initial_lr=1e-3, update_window_size=15600):
+def cyclic_cosine_anneal_schedule(initial_lr=1e-3, update_window_size=40):
     '''
-    Wrapper function to create a LearningRateScheduler with cosine annealing schedule per iteration.
+    Wrapper function to create a LearningRateScheduler with cosine annealing schedule.
     '''
-    def lr_schedule(batch, logs):
+    def lr_schedule(epoch):
         """Learning Rate Schedule
 
-        Learning rate is scheduled to be updated per epoch with a cosine function per iteration. 
+        Learning rate is scheduled to be updated per epoch with a cosine function. 
         Learning rate is raised to initial_lr every update_window_size.
 
         # Arguments
@@ -290,23 +253,11 @@ def cyclic_cosine_anneal_schedule_itr(batch_logs, initial_lr=1e-3, update_window
         # Returns
             lr (float32): learning rate
         """
-        iteration = model.optimizer.iterations
-        print('\n Optimizer iteration {}, batch {}'.format(
-            K.eval(iteration), batch))
-        lr = initial_lr / 2 * \
-            (math.cos(math.pi * ((K.eval(iteration) %
-             update_window_size) / update_window_size)) + 1)
-        K.set_value(model.optimizer.lr, lr)
-        print('\n Learning rate {}, Model learning rate {}'.format(
-            lr, K.eval(model.optimizer.lr)))
-
-    def batch_log(batch, logs):
-        batch_logs['iteration'].append(K.eval(model.optimizer.iterations))
-        batch_logs['lr'].append(K.eval(model.optimizer.lr))
-        batch_logs['loss'].append(logs['loss'])
-        batch_logs['acc'].append(logs['acc'])
-
-    return LambdaCallback(on_batch_begin=lr_schedule)
+        lr = initial_lr / 2 * (math.cos(math.pi * ((epoch % update_window_size) / update_window_size)) + 1)
+        print('Learning rate: ', lr)
+        return lr
+    
+    return LearningRateScheduler(lr_schedule)
 
 
 ###################################
@@ -314,7 +265,6 @@ def cyclic_cosine_anneal_schedule_itr(batch_logs, initial_lr=1e-3, update_window
 # FASTEXT M O D E L
 #
 ##################################
-
 with tf.device('/device:GPU:0'), tf.compat.v1.Session(config=tf.compat.v1.ConfigProto()):
     print('Build model...')
     model = Sequential()
@@ -333,10 +283,15 @@ with tf.device('/device:GPU:0'), tf.compat.v1.Session(config=tf.compat.v1.Config
     #model.add(Dense(2, activation='sigmoid'))
     model.add(Dense(y_train.shape[1], activation='softmax'))
 
-    # model.compile(loss='binary_crossentropy',
+    #model.compile(loss='binary_crossentropy',
+    #model.compile(loss='categorical_crossentropy',
+    #              optimizer='adam',
+    #              metrics=['accuracy'])
+    learning_rate_0 = 1e-3
     model.compile(loss='categorical_crossentropy',
-                  optimizer=Adam(lr=initial_lr),
-                  metrics=['accuracy'])
+                optimizer=Adam(lr=learning_rate_0),
+                metrics=['accuracy'])
+
 
     cp = IcpClassifier(
         ClassifierNc(
@@ -346,47 +301,44 @@ with tf.device('/device:GPU:0'), tf.compat.v1.Session(config=tf.compat.v1.Config
     )
 
     ########################################
-    # add logs/call backs
+    ## add logs/call backs
     # Training log writer
     #######################################
     model_type = "unique"
-    model_name = 'yahoo_%s_model-{epoch:04d}.h5' % model_type
+    model_name = 'yahoo_snapA%s_model-{epoch:04d}.h5' % model_type
     filepath = os.path.join(save_dir, model_name)
     print('Preparing callbacks...')
     # Prepare callbacks for model saving and for learning rate adjustment.
     checkpoint = ModelCheckpoint(filepath=filepath,
-                                 monitor='val_accuracy',
-                                 verbose=1,
-                                 save_best_only=False,
-                                 mode='max')
+                                monitor='val_accuracy',
+                                verbose=1,
+                                save_best_only=False,
+                                mode='max')
     # Learning rate updater
-    batch_num = int(x_train.shape[0]/batch_size)
-    update_window_size = int(math.ceil(epochs*batch_num/top_k))
-    batch_logs = {'iteration': [], 'lr': [], 'loss': [], 'acc': []}
-    lr_scheduler = cyclic_cosine_anneal_schedule_itr(
-        initial_lr=initial_lr, update_window_size=update_window_size, batch_logs=batch_logs)
-
-    # add callbacks
-    logfile = '{}/callback_training_log.csv'.format(save_dir)
-    csvlog = CSVLogger(logfile, separator=',', append=False)
+    lr_scheduler = cyclic_cosine_anneal_schedule(initial_lr=initial_lr, update_window_size=snapshot_window_size)
+    logfile   = '{}/callback_training_log.csv'.format(save_dir)
+    csvlog    =  CSVLogger(logfile, separator=',', append=False)
     callbacks = [checkpoint, lr_scheduler, csvlog]
 
+
     ######################################
-    # Training
+    #Training
     ######################################
-    logfile = '{}/training_log.csv'.format(save_dir)
+    # logfile = '{}/training_log.csv'.format(save_dir)
     if do_train:
         history = cp.fit(x_train, y_train,
-                         batch_size=batch_size,
-                         epochs=epochs,
-                         validation_data=(x_valid, y_valid),
-                         shuffle=True,
-                         callbacks=callbacks
-                         )
+                batch_size=batch_size,
+                epochs=epochs,
+                validation_data=(x_valid, y_valid),
+                shuffle=True,
+                callbacks=callbacks
+                )
+
 
         ###############################################
-        # PREDICTION AND OUPUT
+        # PREDICTION RESULS
         ###############################################
+
         # Save training log
         print('Saving training log...')
         train_error = history.history['loss']
@@ -394,13 +346,14 @@ with tf.device('/device:GPU:0'), tf.compat.v1.Session(config=tf.compat.v1.Config
         f = open(logfile, 'w')
         f.write('current_epoch,total_epochs,train_loss,validation_accuracy\n')
         for i in range(len(train_error)):
-            f.write('{},{},{},{}\n'.format(i+1, epochs,
-                    train_error[i], valid_accuracy[i]))
+            f.write('{},{},{},{}\n'.format(i+1, epochs, train_error[i], valid_accuracy[i]))
         f.close()
     else:
+        logfile   = '{}/callback_training_log.csv'.format(save_dir)
         training_log = pd.read_csv(logfile)
         valid_accuracy = list(training_log.validation_accuracy)
         print('Skipping training...')
+
 
     # Save index for combination
     c = [str(i) for i in range(num_classes)]
@@ -411,40 +364,42 @@ with tf.device('/device:GPU:0'), tf.compat.v1.Session(config=tf.compat.v1.Config
     top_x = []
 
     for i in range(1, top_k):
-        top_x.append(np.argmax(
-            valid_accuracy[i*snapshot_window_size:(i+1)*snapshot_window_size]) + i*snapshot_window_size)
+        top_x.append(np.argmax(valid_accuracy[i*snapshot_window_size:(i+1)*snapshot_window_size]) + i*snapshot_window_size)
     top_v = [valid_accuracy[i] for i in top_x]
-    for x, v in zip(top_x, top_v):
+    for x,v in zip(top_x, top_v):
         name = 'prediction_{:04d}.csv'.format(x+1)
-        weight = v  # valid_accuracy[epochs-1]
-        print("writing to index:", name+str(weight))
+        weight = v #valid_accuracy[epochs-1]
+        print("writing to index:",name+str(weight))
         f.write('{},{}\n'.format(name, weight))
         # predicting
-        modelname = 'yahoo_{}_model-{:04d}.h5'.format(model_type, x)
+        modelname = 'yahoo_snapA{}_model-{:04d}.h5'.format(model_type, x)
         filepath = os.path.join(save_dir, modelname)
-
+        
         cp.model.load_weights(filepath)
         cp.calibrate(x_valid, np.argmax(y_valid, axis=1))
 
         predicts = model.predict(x_test)
         # Save predicts
         predictfile = '{}/prediction_{:04d}.csv'.format(save_dir, x+1)
-        f1 = open(predictfile, 'w')
+        f1 = open(predictfile,'w')
         f1.write(header)
         np.savetxt(f1, predicts, delimiter=",")
         f1.close()
+        
 
         p = cp.predict(x_test, significance=0.1)
         f3 = open('{}/prediction_set_{:04d}.csv'.format(save_dir, x+1), 'w')
         f3.write(header)
         np.savetxt(f3, p, delimiter=",")
         f3.close()
-
+    
     f.close()
-    # Save targets
-    print('Saving target file...')
-    targetfile = '{}/target.csv'.format(save_dir)
-    f2 = open(targetfile, 'w')
-    f2.write(header)
-    np.savetxt(f2, y_test, delimiter=",")
-    f2.close()
+
+    
+# Save targets
+print('Saving target file...')
+targetfile = '{}/target.csv'.format(save_dir)
+f2 = open(targetfile,'w')
+f2.write(header)
+np.savetxt(f2, y_test, delimiter=",")
+f2.close()
